@@ -8,7 +8,7 @@ export async function POST(request) {
 
     const client = await pool.connect();
 
-    // 1. Buscar a Prova (com as questões e respostas corretas)
+    // 1. Buscar a Prova
     const examRes = await client.query('SELECT questions FROM exams WHERE id = $1', [examId]);
     
     if (examRes.rows.length === 0) {
@@ -18,18 +18,30 @@ export async function POST(request) {
 
     const questions = examRes.rows[0].questions;
     
-    // 2. Calcular a Nota no Backend
+    // 2. Calcular a Nota
     let hits = 0;
     const total = questions.length;
     
     for (let i = 0; i < total; i++) {
-        // A resposta do aluno (answers[i]) deve bater com a resposta definida no banco (questions[i].answer)
-        // Ignora case (v vs V)
-        const studentAns = (answers[i] || '').toUpperCase();
-        const correctAns = (questions[i].answer || '').toUpperCase();
+        const qType = questions[i].type;
+        const correctAns = questions[i].answer; // Pode ser string "A" ou array ["V", "F", ...]
+        const studentAns = answers[i];
 
-        if (studentAns === correctAns) {
-            hits++;
+        if (qType === 'true_false' && Array.isArray(correctAns)) {
+            // Lógica para V/F (5 itens): O aluno só pontua se acertar a sequência EXATA inteira
+            // Se preferir pontuação parcial, a lógica mudaria aqui.
+            const isCorrectSequence = Array.isArray(studentAns) && 
+                studentAns.length === correctAns.length &&
+                correctAns.every((val, index) => val === studentAns[index]);
+            
+            if (isCorrectSequence) {
+                hits++;
+            }
+        } else {
+            // Lógica antiga para Múltipla Escolha (A-E)
+            if ((studentAns || '').toUpperCase() === (correctAns || '').toUpperCase()) {
+                hits++;
+            }
         }
     }
     
