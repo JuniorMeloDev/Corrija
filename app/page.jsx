@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 // =========================================================================
 // 1. UTILITÁRIOS E CONSTANTES
@@ -145,8 +146,6 @@ const NovaProva = ({ onClose, onCreate }) => {
 };
 
 const StudentExam = ({ examData, onFinishExam, onBack }) => {
-    // ... [O código do StudentExam permanece o mesmo para economizar espaço, se precisar me avise] ...
-    // Vou incluir a versão simplificada para focar no problema
     const [name, setName] = useState('');
     const [matricula, setMatricula] = useState('');
     const [answers, setAnswers] = useState([]); 
@@ -196,11 +195,17 @@ const StudentExam = ({ examData, onFinishExam, onBack }) => {
         } catch (error) { setErrorMsg('Erro: ' + error.message); setShowConfirm(false); } finally { setIsSubmitting(false); }
     };
 
+    if (!examData) return <div className="text-center p-10">Carregando prova...</div>;
+
     if (examResult) return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
             <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
-                <h2 className="text-2xl font-bold">Nota: {Number(examResult.score).toFixed(1)}</h2>
-                <button onClick={onBack} className="mt-4 w-full py-3 bg-gray-800 text-white rounded-xl">Sair</button>
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <h2 className="text-2xl font-bold mb-2">Prova Enviada!</h2>
+                <p className="text-gray-600 mb-6">Sua nota: <span className="font-bold text-blue-600 text-xl">{Number(examResult.score).toFixed(1)}</span></p>
+                <button onClick={() => window.location.reload()} className="mt-4 w-full py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition">Nova Prova</button>
             </div>
         </div>
     );
@@ -208,32 +213,34 @@ const StudentExam = ({ examData, onFinishExam, onBack }) => {
     return (
         <div className="min-h-screen bg-gray-50 p-4 max-w-3xl mx-auto">
             <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 space-y-6">
-                <h1 className="text-2xl font-bold text-blue-800">{examData.subject}</h1>
+                <h1 className="text-2xl font-bold text-blue-800 text-center">{examData.subject}</h1>
                 <div className="grid grid-cols-2 gap-4">
-                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="p-3 border rounded-lg" placeholder="Nome" />
-                    <input type="text" value={matricula} onChange={e => setMatricula(e.target.value)} className="p-3 border rounded-lg" placeholder="Matrícula" />
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100" placeholder="Seu Nome Completo" />
+                    <input type="text" value={matricula} onChange={e => setMatricula(e.target.value)} className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100" placeholder="Sua Matrícula" />
                 </div>
                 {examData.questions.map((q, idx) => (
-                    <div key={idx} className="p-4 border rounded-xl">
-                        <span className="font-bold mr-3">#{idx+1}</span>
+                    <div key={idx} className="p-4 border rounded-xl bg-gray-50/50">
+                        <span className="font-bold mr-3 text-gray-500">#{idx+1}</span>
                         {q.type === 'true_false' ? (
-                            <div className="pl-4 space-y-2">
+                            <div className="pl-4 space-y-2 mt-2">
                                 {['a','b','c','d','e'].map((sub, sIdx) => (
-                                    <div key={sub} className="flex gap-2 items-center">
-                                        <span className="font-mono">{sub})</span>
-                                        {CHOICES_BOOL.map(c => <Bubble key={c} label={c} size="small" isMarked={answers[idx] && answers[idx][sIdx] === c} onMark={() => handleMark(idx, c, sIdx)} colorClass="green" />)}
+                                    <div key={sub} className="flex gap-4 items-center justify-between sm:justify-start">
+                                        <span className="font-mono text-gray-600 font-bold">{sub})</span>
+                                        <div className="flex gap-2">
+                                            {CHOICES_BOOL.map(c => <Bubble key={c} label={c} size="small" isMarked={answers[idx] && answers[idx][sIdx] === c} onMark={() => handleMark(idx, c, sIdx)} colorClass="green" />)}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="flex gap-2">{CHOICES_MULT.map(c => <Bubble key={c} label={c} isMarked={answers[idx] === c} onMark={() => handleMark(idx, c)} />)}</div>
+                            <div className="flex gap-2 mt-2 justify-center sm:justify-start">{CHOICES_MULT.map(c => <Bubble key={c} label={c} isMarked={answers[idx] === c} onMark={() => handleMark(idx, c)} />)}</div>
                         )}
                     </div>
                 ))}
-                {errorMsg && <div className="text-red-500">{errorMsg}</div>}
-                <button onClick={handlePreSubmit} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold">Finalizar</button>
+                {errorMsg && <div className="text-red-500 text-center font-bold">{errorMsg}</div>}
+                <button onClick={handlePreSubmit} disabled={isSubmitting} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition">{isSubmitting ? 'Enviando...' : 'Finalizar Prova'}</button>
             </div>
-            <ConfirmModal isOpen={showConfirm} title="Finalizar?" onConfirm={handleConfirmSubmit} onCancel={() => setShowConfirm(false)} message="Confirmar envio?" />
+            <ConfirmModal isOpen={showConfirm} title="Finalizar Prova?" onConfirm={handleConfirmSubmit} onCancel={() => setShowConfirm(false)} message="Tem certeza que deseja enviar suas respostas? Não será possível alterar depois." />
         </div>
     );
 };
@@ -270,14 +277,10 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate }) => {
 
     const handleSaveKey = async () => {
         setIsSaving(true);
-        console.log("FRONTEND: Iniciando salvamento..."); // LOG
-
         const updatedQuestions = fullExamData.questions.map((q, idx) => ({
             ...q,
             answer: tempKey[idx]
         }));
-
-        console.log("FRONTEND: Dados a enviar:", updatedQuestions); // LOG
 
         try {
             const res = await fetch(`/api/exams/${exam.id}`, {
@@ -286,8 +289,6 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate }) => {
                 body: JSON.stringify({ questions: updatedQuestions })
             });
 
-            console.log("FRONTEND: Status da resposta:", res.status); // LOG
-
             if (res.ok) {
                 setFullExamData(prev => ({ ...prev, questions: updatedQuestions }));
                 onUpdateExam(exam.id, { ...fullExamData, questions: updatedQuestions });
@@ -295,12 +296,10 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate }) => {
                 setMsg('✅ Gabarito salvo com sucesso!');
             } else {
                 const errData = await res.json();
-                console.error("FRONTEND: Erro da API:", errData); // LOG
-                setMsg(`❌ Erro ao salvar: ${errData.error || 'Erro desconhecido'}`);
+                setMsg(`❌ Erro: ${errData.error}`);
             }
         } catch (e) {
-            console.error("FRONTEND: Erro de rede:", e); // LOG
-            setMsg('❌ Erro de conexão ao salvar.');
+            setMsg('❌ Erro de conexão.');
         } finally {
             setIsSaving(false);
             setTimeout(() => setMsg(''), 4000);
@@ -326,22 +325,27 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate }) => {
     return (
         <div className="space-y-6 animate-fade-in-up">
             <div className="flex items-center justify-between">
-                <button onClick={onBack} className="text-gray-500 hover:text-blue-600 font-bold">&larr; Voltar</button>
+                <button onClick={onBack} className="text-gray-500 hover:text-blue-600 font-bold flex items-center gap-2">
+                    <span>&larr;</span> Voltar
+                </button>
                 <div className="flex gap-2">
-                    <button onClick={() => setShowQR(true)} className="bg-gray-800 text-white px-4 py-2 rounded-lg font-bold">QR Code</button>
-                    <button onClick={onSimulate} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold">Simular Aluno</button>
+                    <button onClick={() => setShowQR(true)} className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg font-bold shadow-md transition flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM6 8V4m0 4h2m4 0a2 2 0 100-4 2 2 0 000 4zm0 0v4m0 4h2m4 0a2 2 0 100-4 2 2 0 000 4zm0 0v4m0 4h2m4 0a2 2 0 100-4 2 2 0 000 4zm0 0v4" /></svg>
+                        QR Code
+                    </button>
+                    <button onClick={onSimulate} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold shadow-md transition">Simular</button>
                 </div>
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                 <h1 className="text-3xl font-extrabold text-blue-800">{fullExamData.subject}</h1>
-                <p className="text-gray-500 text-xs font-mono bg-gray-100 px-2 py-1 rounded">ID: {fullExamData.id}</p>
+                <p className="text-gray-500 text-xs font-mono bg-gray-100 px-2 py-1 rounded inline-block mt-2">ID: {fullExamData.id}</p>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 flex flex-col h-full">
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 flex-1 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold text-gray-700">Gabarito</h2>
-                            <button onClick={() => isEditingKey ? handleSaveKey() : setIsEditingKey(true)} disabled={isSaving} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition ${isEditingKey ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>{isSaving ? 'Salvando...' : (isEditingKey ? 'Salvar' : 'Editar')}</button>
+                            <h2 className="text-lg font-bold text-gray-700">Gabarito Oficial</h2>
+                            <button onClick={() => isEditingKey ? handleSaveKey() : setIsEditingKey(true)} disabled={isSaving} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition ${isEditingKey ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>{isSaving ? '...' : (isEditingKey ? 'Salvar' : 'Editar')}</button>
                         </div>
                         {msg && <div className={`mb-3 p-2 text-xs rounded border ${msg.includes('Erro') || msg.includes('❌') ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>{msg}</div>}
                         <div className="overflow-y-auto pr-2 custom-scrollbar flex-1 max-h-[500px]">
@@ -364,15 +368,17 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate }) => {
                 </div>
                 <div className="lg:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
                     <h2 className="text-lg font-bold text-gray-700 mb-4">Resultados ({results.length})</h2>
-                    {results.length===0?<p className="text-center text-gray-400 py-10">Sem envios.</p>:(
-                        <table className="w-full text-sm">
-                            <thead><tr className="text-gray-400 border-b"><th className="text-left py-2">Aluno</th><th>Matrícula</th><th className="text-right">Nota</th></tr></thead>
-                            <tbody>{results.map((r,i)=><tr key={i} className="border-b"><td className="py-2 font-bold">{r.studentId}</td><td className="text-center">{r.matricula}</td><td className="text-right font-bold">{Number(r.score).toFixed(1)}</td></tr>)}</tbody>
-                        </table>
+                    {results.length===0?<p className="text-center text-gray-400 py-10">Nenhum aluno enviou respostas ainda.</p>:(
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead><tr className="text-gray-400 border-b"><th className="text-left py-2 font-medium">Aluno</th><th className="font-medium text-center">Matrícula</th><th className="text-right font-medium">Nota</th></tr></thead>
+                                <tbody>{results.map((r,i)=><tr key={i} className="border-b hover:bg-gray-50"><td className="py-3 font-bold text-gray-700">{r.studentId}</td><td className="text-center text-gray-500">{r.matricula}</td><td className="text-right font-bold text-blue-600">{Number(r.score).toFixed(1)}</td></tr>)}</tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             </div>
-            {showQR && <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4"><div className="bg-white p-8 rounded-2xl text-center relative"><button onClick={()=>setShowQR(false)} className="absolute top-4 right-4">✕</button><h3 className="font-bold text-xl mb-4">QR Code</h3><img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(examUrl)}`} className="mx-auto border p-2 rounded mb-4" /><input value={examUrl} readOnly className="w-full p-2 border rounded text-xs" /></div></div>}
+            {showQR && <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50"><div className="bg-white p-8 rounded-2xl text-center relative max-w-sm w-full"><button onClick={()=>setShowQR(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500">✕</button><h3 className="font-bold text-xl mb-4">Acesso do Aluno</h3><img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(examUrl)}`} className="mx-auto border p-2 rounded-lg mb-4" /><p className="text-xs text-gray-500 mb-2">Peça para os alunos escanearem ou acesse:</p><input value={examUrl} readOnly className="w-full p-2 border rounded text-xs text-center bg-gray-50" onClick={(e)=>e.target.select()} /></div></div>}
         </div>
     );
 };
@@ -382,8 +388,7 @@ const ExamList = ({ exams, onCreateExam, onSelectExam, onDeleteExam }) => {
     const [examToDelete, setExamToDelete] = useState(null);
 
     const handleDelete = async (id) => {
-        console.log("FRONTEND: Tentando deletar ID:", id); // LOG
-        onDeleteExam(id); // Chama a função que passamos do AppWrapper (que agora tem tratamento de erro)
+        onDeleteExam(id);
         setExamToDelete(null);
     };
 
@@ -392,31 +397,43 @@ const ExamList = ({ exams, onCreateExam, onSelectExam, onDeleteExam }) => {
             <div className="space-y-8 animate-fade-in-up">
                 <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border gap-4">
                     <h2 className="text-2xl font-bold text-gray-800">Minhas Provas</h2>
-                    <button onClick={() => setShowModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg">+ Nova Prova</button>
+                    <button onClick={() => setShowModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition transform hover:-translate-y-0.5">+ Nova Prova</button>
                 </div>
                 <div className="grid grid-cols-1 gap-4">
-                    {exams.length === 0 ? <p className="text-center text-gray-400 py-10">Nenhuma prova.</p> : exams.map(exam => (
-                        <div key={exam.id} className="bg-white p-5 rounded-2xl shadow-sm border flex justify-between items-center">
-                            <div><h3 className="font-bold text-gray-800">{exam.subject}</h3><span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">ID: {exam.id}</span></div>
-                            <div className="flex gap-2">
-                                <button onClick={() => onSelectExam(exam)} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-bold text-sm">Gerenciar</button>
-                                <button onClick={() => setExamToDelete(exam)} className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold text-sm">Excluir</button>
+                    {exams.length === 0 ? <p className="text-center text-gray-400 py-10 bg-white rounded-2xl border border-dashed">Nenhuma prova criada.</p> : exams.map(exam => (
+                        <div key={exam.id} className="bg-white p-5 rounded-2xl shadow-sm border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-md transition">
+                            <div>
+                                <h3 className="font-bold text-lg text-gray-800">{exam.subject}</h3>
+                                <div className="flex gap-2 mt-1">
+                                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-mono">ID: {exam.id}</span>
+                                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-bold">{exam.resultsCount || 0} envios</span>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <button onClick={() => onSelectExam(exam)} className="flex-1 sm:flex-none bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-2 rounded-lg font-bold text-sm transition">Gerenciar</button>
+                                <button onClick={() => setExamToDelete(exam)} className="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-bold text-sm transition">Excluir</button>
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
-            {showModal && <NovaProva onClose={() => setShowModal(false)} onCreate={onCreateExam} />}
-            <ConfirmModal isOpen={!!examToDelete} title="Excluir Disciplina" message={`Excluir "${examToDelete?.subject}"?`} confirmText="Sim, excluir" isDestructive={true} onConfirm={() => handleDelete(examToDelete.id)} onCancel={() => setExamToDelete(null)} />
+            {showModal && <NovaProva isOpen={showModal} onClose={() => setShowModal(false)} onCreate={onCreateExam} />}
+            <ConfirmModal isOpen={!!examToDelete} title="Excluir Disciplina" message={`Tem certeza que deseja excluir "${examToDelete?.subject}"? Todos os resultados serão perdidos.`} confirmText="Sim, excluir" isDestructive={true} onConfirm={() => handleDelete(examToDelete.id)} onCancel={() => setExamToDelete(null)} />
         </>
     );
 };
 
-const AppWrapper = () => {
-    const [view, setView] = useState('dashboard'); 
+// Componente de Conteúdo separado para usar useSearchParams com Suspense
+const Content = () => {
+    const searchParams = useSearchParams();
+    const examIdFromUrl = searchParams.get('examId');
+
+    const [view, setView] = useState('dashboard'); // 'dashboard', 'student', 'exam-detail'
     const [exams, setExams] = useState([]);
     const [selectedExamId, setSelectedExamId] = useState(null);
+    const [isLoadingUrlExam, setIsLoadingUrlExam] = useState(false);
 
+    // Carrega todas as provas (para o professor)
     const loadExams = useCallback(async () => {
         try {
             const res = await fetch('/api/exams');
@@ -424,7 +441,35 @@ const AppWrapper = () => {
         } catch (e) { console.error('Erro load:', e); }
     }, []);
 
-    useEffect(() => { loadExams(); }, [loadExams]);
+    // Efeito para checar URL
+    useEffect(() => {
+        if (examIdFromUrl) {
+            setIsLoadingUrlExam(true);
+            // Busca apenas a prova específica
+            fetch(`/api/exams/${examIdFromUrl}`)
+                .then(res => {
+                    if(!res.ok) throw new Error('Prova não encontrada');
+                    return res.json();
+                })
+                .then(data => {
+                    // Adiciona/Atualiza na lista (caso já exista) ou cria array novo só com ela
+                    setExams(prev => {
+                        const exists = prev.find(e => e.id === data.id);
+                        if(exists) return prev.map(e => e.id === data.id ? data : e);
+                        return [...prev, data];
+                    });
+                    setSelectedExamId(data.id);
+                    setView('student');
+                })
+                .catch(err => {
+                    alert("Erro ao carregar prova pelo link: " + err.message);
+                    loadExams(); // Fallback para dashboard
+                })
+                .finally(() => setIsLoadingUrlExam(false));
+        } else {
+            loadExams();
+        }
+    }, [examIdFromUrl, loadExams]);
 
     const handleCreateExam = async (subject, questions) => {
         try {
@@ -433,20 +478,13 @@ const AppWrapper = () => {
         } catch (e) { alert('Erro criar'); }
     };
 
-    // AQUI ESTÁ A LÓGICA DE DELETE CORRIGIDA
     const handleDeleteExam = async (id) => {
-        console.log("FRONTEND (AppWrapper): Executando DELETE fetch para:", id); // LOG
         try {
             const res = await fetch(`/api/exams/${id}`, { method: 'DELETE' });
-            
-            // Verifica se a API retornou erro
             if (!res.ok) {
                 const data = await res.json();
-                console.error("FRONTEND: Erro da API no delete:", data); // LOG
                 throw new Error(data.error || 'Falha ao excluir');
             }
-
-            console.log("FRONTEND: Delete sucesso!"); // LOG
             loadExams();
             if (selectedExamId === id) { setView('dashboard'); setSelectedExamId(null); }
         } catch(e) {
@@ -454,32 +492,57 @@ const AppWrapper = () => {
         }
     };
 
-    const currentExam = exams.find(e => e.id === selectedExamId);
-
-    const renderContent = () => {
-        if (view === 'student') return <StudentExam examData={currentExam} onFinishExam={()=>{}} onBack={()=>{setView('dashboard')}} />;
-        if (view === 'exam-detail') return <ExamDetail exam={currentExam} onUpdateExam={(id, data)=>setExams(prev=>prev.map(e=>e.id===id?data:e))} onBack={()=>{setView('dashboard');setSelectedExamId(null)}} onSimulate={()=>{setView('student')}} />;
+    if (isLoadingUrlExam) {
         return (
-            <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
-                <div className="max-w-5xl mx-auto">
-                    <header className="mb-8"><h1 className="text-3xl font-extrabold text-blue-900">Painel do Professor</h1></header>
-                    <ExamList exams={exams} onCreateExam={handleCreateExam} onSelectExam={(e)=>{setSelectedExamId(e.id);setView('exam-detail')}} onDeleteExam={handleDeleteExam} />
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="animate-pulse flex flex-col items-center">
+                    <div className="h-12 w-12 bg-blue-200 rounded-full mb-4"></div>
+                    <div className="h-4 w-48 bg-gray-200 rounded"></div>
                 </div>
             </div>
         );
-    };
+    }
+
+    const currentExam = exams.find(e => e.id === selectedExamId);
+
+    if (view === 'student') {
+        return <StudentExam examData={currentExam} onFinishExam={()=>{}} onBack={()=>{
+            // Se veio por URL, não tem "voltar" para dashboard lógico, mas deixamos limpar a view
+            setView('dashboard');
+            // Remove o param da URL visualmente (opcional)
+            window.history.pushState({}, '', '/');
+        }} />;
+    }
+
+    if (view === 'exam-detail' && currentExam) {
+        return <ExamDetail exam={currentExam} onUpdateExam={(id, data)=>setExams(prev=>prev.map(e=>e.id===id?data:e))} onBack={()=>{setView('dashboard');setSelectedExamId(null)}} onSimulate={()=>{setView('student')}} />;
+    }
 
     return (
-        <>
-            {renderContent()}
+        <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
+            <div className="max-w-5xl mx-auto">
+                <header className="mb-8"><h1 className="text-3xl font-extrabold text-blue-900">Painel do Professor</h1></header>
+                <ExamList exams={exams} onCreateExam={handleCreateExam} onSelectExam={(e)=>{setSelectedExamId(e.id);setView('exam-detail')}} onDeleteExam={handleDeleteExam} />
+            </div>
+        </div>
+    );
+};
+
+export default function Page() {
+    return (
+        <Suspense fallback={<div className="p-10 text-center">Carregando aplicação...</div>}>
+            <Content />
             <style jsx global>{`
                 @keyframes fade-in-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 @keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
                 .animate-fade-in-up { animation: fade-in-up 0.3s ease-out forwards; }
                 .animate-scale-in { animation: scale-in 0.2s ease-out forwards; }
+                /* Custom Scrollbar */
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
             `}</style>
-        </>
+        </Suspense>
     );
-};
-
-export default AppWrapper;
+}
