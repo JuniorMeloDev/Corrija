@@ -4,11 +4,12 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { examId, studentName, matricula, answers } = await request.json();
+    // 1. Receber o campo 'university'
+    const { examId, studentName, matricula, university, answers } = await request.json();
 
     const client = await pool.connect();
 
-    // 1. Buscar a Prova
+    // Buscar a Prova
     const examRes = await client.query('SELECT questions FROM exams WHERE id = $1', [examId]);
     
     if (examRes.rows.length === 0) {
@@ -18,40 +19,38 @@ export async function POST(request) {
 
     const questions = examRes.rows[0].questions;
     
-    // 2. Calcular a Nota
+    // Calcular a Nota (Lógica V/F parcial + Múltipla Escolha)
     let hits = 0;
     const total = questions.length;
     
     for (let i = 0; i < total; i++) {
         const qType = questions[i].type;
-        const correctAns = questions[i].answer; // Pode ser string "A" ou array ["V", "F", ...]
+        const correctAns = questions[i].answer;
         const studentAns = answers[i];
 
         if (qType === 'true_false' && Array.isArray(correctAns)) {
-            // Lógica para V/F (5 itens): O aluno só pontua se acertar a sequência EXATA inteira
-            // Se preferir pontuação parcial, a lógica mudaria aqui.
-            const isCorrectSequence = Array.isArray(studentAns) && 
-                studentAns.length === correctAns.length &&
-                correctAns.every((val, index) => val === studentAns[index]);
-            
-            if (isCorrectSequence) {
-                hits++;
+            if (Array.isArray(studentAns)) {
+                correctAns.forEach((val, index) => {
+                    if (val && studentAns[index] === val) {
+                        hits += 0.2;
+                    }
+                });
             }
         } else {
-            // Lógica antiga para Múltipla Escolha (A-E)
             if ((studentAns || '').toUpperCase() === (correctAns || '').toUpperCase()) {
-                hits++;
+                hits += 1.0;
             }
         }
     }
     
+    hits = parseFloat(hits.toFixed(2));
     const score = (hits / total) * 10.0;
 
-    // 3. Salvar o Resultado
+    // 2. Inserir a universidade no banco
     const insertQuery = `
       INSERT INTO results 
-      (exam_id, student_name, matricula, score, hits, total_questions, student_answers)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      (exam_id, student_name, matricula, university, score, hits, total_questions, student_answers)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
     
@@ -59,6 +58,7 @@ export async function POST(request) {
       examId, 
       studentName, 
       matricula, 
+      university || 'N/A', // Valor padrão se estiver vazio
       score, 
       hits, 
       total, 

@@ -2,7 +2,6 @@
 import pool from '@/app/lib/db';
 import { NextResponse } from 'next/server';
 
-// 1. GET: Busca detalhes (PÚBLICO - para o aluno acessar)
 export async function GET(request, { params }) {
   const { id } = await params;
   
@@ -26,11 +25,13 @@ export async function GET(request, { params }) {
       id: exam.id,
       subject: exam.subject,
       questions: exam.questions,
-      // Retornamos o user_id para o frontend saber se o usuário é o dono (opcional)
-      ownerId: exam.user_id, 
+      ownerId: exam.user_id,
       results: resultsRes.rows.map(r => ({
+        id: r.id, // Importante para chaves do React
         studentId: r.student_name,
         matricula: r.matricula,
+        university: r.university, // <--- Retornando Universidade
+        studentAnswers: r.student_answers, // <--- Retornando Respostas do Aluno
         score: parseFloat(r.score),
         hits: r.hits,
         timestamp: r.submitted_at
