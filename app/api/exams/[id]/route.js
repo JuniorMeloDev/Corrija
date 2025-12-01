@@ -2,9 +2,9 @@
 import pool from '@/app/lib/db';
 import { NextResponse } from 'next/server';
 
-// 1. GET: Busca detalhes
+// 1. GET: Busca detalhes (PÚBLICO - para o aluno acessar)
 export async function GET(request, { params }) {
-  const { id } = await params; // <--- CORREÇÃO AQUI (Adicionado await)
+  const { id } = await params;
   
   try {
     const client = await pool.connect();
@@ -26,6 +26,8 @@ export async function GET(request, { params }) {
       id: exam.id,
       subject: exam.subject,
       questions: exam.questions,
+      // Retornamos o user_id para o frontend saber se o usuário é o dono (opcional)
+      ownerId: exam.user_id, 
       results: resultsRes.rows.map(r => ({
         studentId: r.student_name,
         matricula: r.matricula,
@@ -40,62 +42,64 @@ export async function GET(request, { params }) {
   }
 }
 
-// 2. PUT: Salva o Gabarito
+// 2. PUT: Salva o Gabarito (PROTEGIDO - Só o dono)
 export async function PUT(request, { params }) {
-    const { id } = await params; // <--- CORREÇÃO AQUI (Adicionado await)
-    console.log(`[API] 🟡 Iniciando PUT para prova ID: ${id}`); 
+    const { id } = await params;
+    const userId = request.headers.get('x-user-id');
+
+    if (!userId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     try {
         const body = await request.json();
         const { questions } = body; 
 
-        if (!questions) {
-            return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 });
-        }
+        if (!questions) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 });
 
         const client = await pool.connect();
         
-        // Query de atualização
+        // Verifica se a prova pertence ao usuário antes de atualizar
         const result = await client.query(
-            'UPDATE exams SET questions = $1 WHERE id = $2',
-            [JSON.stringify(questions), id]
+            'UPDATE exams SET questions = $1 WHERE id = $2 AND user_id = $3',
+            [JSON.stringify(questions), id, userId]
         );
         
         client.release();
 
         if (result.rowCount === 0) {
-            console.warn(`[API] ⚠️ Aviso: Nenhuma prova encontrada com ID ${id} para atualizar.`);
-            return NextResponse.json({ error: 'Prova não encontrada' }, { status: 404 });
+            return NextResponse.json({ error: 'Prova não encontrada ou sem permissão' }, { status: 403 });
         }
 
         return NextResponse.json({ success: true });
 
     } catch (error) {
-        console.error('[API] 💥 ERRO CRÍTICO NO PUT:', error);
-        return NextResponse.json({ error: 'Erro ao salvar alterações', details: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Erro ao salvar alterações' }, { status: 500 });
     }
 }
 
-// 3. DELETE: Exclui prova
+// 3. DELETE: Exclui prova (PROTEGIDO - Só o dono)
 export async function DELETE(request, { params }) {
-    const { id } = await params; // <--- CORREÇÃO AQUI (Adicionado await)
-    console.log(`[API] 🔴 Iniciando DELETE para prova ID: ${id}`);
+    const { id } = await params;
+    const userId = request.headers.get('x-user-id');
+
+    if (!userId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     try {
         const client = await pool.connect();
         
+        // Verifica propriedade primeiro (opcional, mas bom para garantir)
+        const checkOwner = await client.query('SELECT id FROM exams WHERE id = $1 AND user_id = $2', [id, userId]);
+        if (checkOwner.rows.length === 0) {
+            client.release();
+            return NextResponse.json({ error: 'Permissão negada ou prova inexistente' }, { status: 403 });
+        }
+
         await client.query('DELETE FROM results WHERE exam_id = $1', [id]);
-        const result = await client.query('DELETE FROM exams WHERE id = $1', [id]);
+        await client.query('DELETE FROM exams WHERE id = $1', [id]);
         
         client.release();
         
-        if (result.rowCount === 0) {
-             return NextResponse.json({ error: 'Prova não encontrada para exclusão' }, { status: 404 });
-        }
-        
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error('[API] 💥 ERRO CRÍTICO NO DELETE:', error);
-        return NextResponse.json({ error: 'Erro ao excluir prova', details: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Erro ao excluir prova' }, { status: 500 });
     }
 }

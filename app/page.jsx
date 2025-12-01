@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Login from '@/app/components/Login'; // Certifique-se de que este componente existe
 
 // =========================================================================
 // 1. UTILITÁRIOS E CONSTANTES
@@ -285,7 +286,10 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate }) => {
         try {
             const res = await fetch(`/api/exams/${exam.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-user-id': userId
+                },
                 body: JSON.stringify({ questions: updatedQuestions })
             });
 
@@ -417,7 +421,7 @@ const ExamList = ({ exams, onCreateExam, onSelectExam, onDeleteExam }) => {
                     ))}
                 </div>
             </div>
-            {showModal && <NovaProva isOpen={showModal} onClose={() => setShowModal(false)} onCreate={onCreateExam} />}
+            {showModal && <NovaProva onClose={() => setShowModal(false)} onCreate={onCreateExam} />}
             <ConfirmModal isOpen={!!examToDelete} title="Excluir Disciplina" message={`Tem certeza que deseja excluir "${examToDelete?.subject}"? Todos os resultados serão perdidos.`} confirmText="Sim, excluir" isDestructive={true} onConfirm={() => handleDelete(examToDelete.id)} onCancel={() => setExamToDelete(null)} />
         </>
     );
@@ -428,59 +432,111 @@ const Content = () => {
     const searchParams = useSearchParams();
     const examIdFromUrl = searchParams.get('examId');
 
-    const [view, setView] = useState('dashboard'); // 'dashboard', 'student', 'exam-detail'
+    // Estado de Autenticação
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [user, setUser] = useState(null); // <--- NOVO: Armazena o objeto do usuário (id, email)
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+    const [view, setView] = useState('dashboard');
     const [exams, setExams] = useState([]);
     const [selectedExamId, setSelectedExamId] = useState(null);
     const [isLoadingUrlExam, setIsLoadingUrlExam] = useState(false);
 
-    // Carrega todas as provas (para o professor)
-    const loadExams = useCallback(async () => {
-        try {
-            const res = await fetch('/api/exams');
-            if (res.ok) setExams(await res.json());
-        } catch (e) { console.error('Erro load:', e); }
-    }, []);
+    // Verificar login ao carregar
+    useEffect(() => {
+        // Se tem examId na URL, é aluno
+        if (examIdFromUrl) {
+            setIsCheckingAuth(false);
+            return; 
+        }
 
-    // Efeito para checar URL
+        const storedUser = localStorage.getItem('corrija_user');
+        if (storedUser) {
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser); // <--- Guardamos o usuário no estado
+            setIsAuthenticated(true);
+        }
+        setIsCheckingAuth(false);
+    }, [examIdFromUrl]);
+
+    const handleLoginSuccess = (userData) => {
+        setUser(userData);
+        setIsAuthenticated(true);
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('corrija_user');
+        setUser(null);
+        setIsAuthenticated(false);
+        setExams([]); // Limpa as provas da tela
+    };
+
+    // Carrega provas (com Header de Autenticação)
+    const loadExams = useCallback(async () => {
+        if (!user && !examIdFromUrl) return; // Só carrega se tiver usuário ou for link de aluno
+        
+        // Se for professor logado, busca as DELE
+        if (user) {
+            try {
+                const res = await fetch('/api/exams', {
+                    headers: { 'x-user-id': user.id } // <--- IMPORTANTE: Enviando ID
+                });
+                if (res.ok) setExams(await res.json());
+            } catch (e) { console.error('Erro load:', e); }
+        }
+    }, [user, examIdFromUrl]);
+
+    // Efeito para carregar provas quando o usuário loga
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            loadExams();
+        }
+    }, [isAuthenticated, user, loadExams]);
+
+    // Efeito para checar URL (Aluno) - INALTERADO
     useEffect(() => {
         if (examIdFromUrl) {
             setIsLoadingUrlExam(true);
-            // Busca apenas a prova específica
             fetch(`/api/exams/${examIdFromUrl}`)
                 .then(res => {
                     if(!res.ok) throw new Error('Prova não encontrada');
                     return res.json();
                 })
                 .then(data => {
-                    // Adiciona/Atualiza na lista (caso já exista) ou cria array novo só com ela
-                    setExams(prev => {
-                        const exists = prev.find(e => e.id === data.id);
-                        if(exists) return prev.map(e => e.id === data.id ? data : e);
-                        return [...prev, data];
-                    });
+                    setExams(prev => [...prev, data]);
                     setSelectedExamId(data.id);
                     setView('student');
                 })
                 .catch(err => {
-                    alert("Erro ao carregar prova pelo link: " + err.message);
-                    loadExams(); // Fallback para dashboard
+                    alert("Erro: " + err.message);
+                    window.location.href = '/';
                 })
                 .finally(() => setIsLoadingUrlExam(false));
-        } else {
-            loadExams();
         }
-    }, [examIdFromUrl, loadExams]);
+    }, [examIdFromUrl]);
 
+    // Criar Prova (Com Header)
     const handleCreateExam = async (subject, questions) => {
         try {
-            await fetch('/api/exams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, questions }) });
+            await fetch('/api/exams', { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-user-id': user.id // <--- IMPORTANTE
+                }, 
+                body: JSON.stringify({ subject, questions }) 
+            });
             loadExams();
         } catch (e) { alert('Erro criar'); }
     };
 
+    // Deletar Prova (Com Header)
     const handleDeleteExam = async (id) => {
         try {
-            const res = await fetch(`/api/exams/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/exams/${id}`, { 
+                method: 'DELETE',
+                headers: { 'x-user-id': user.id } // <--- IMPORTANTE
+            });
             if (!res.ok) {
                 const data = await res.json();
                 throw new Error(data.error || 'Falha ao excluir');
@@ -492,7 +548,12 @@ const Content = () => {
         }
     };
 
-    if (isLoadingUrlExam) {
+    // Atualizar Prova (Detail) precisa passar o updateExam que agora vai usar o ID também
+    // No ExamDetail, precisamos injetar o header também.
+    // Vamos modificar o render do ExamDetail abaixo.
+
+    // RENDERIZAÇÃO
+    if (isCheckingAuth || isLoadingUrlExam) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="animate-pulse flex flex-col items-center">
@@ -503,25 +564,52 @@ const Content = () => {
         );
     }
 
-    const currentExam = exams.find(e => e.id === selectedExamId);
-
     if (view === 'student') {
+        const currentExam = exams.find(e => e.id === selectedExamId);
         return <StudentExam examData={currentExam} onFinishExam={()=>{}} onBack={()=>{
-            // Se veio por URL, não tem "voltar" para dashboard lógico, mas deixamos limpar a view
-            setView('dashboard');
-            // Remove o param da URL visualmente (opcional)
-            window.history.pushState({}, '', '/');
+            if (isAuthenticated) {
+                setView('dashboard');
+                window.history.pushState({}, '', '/');
+            } else {
+                alert("Prova finalizada.");
+                window.location.href = '/';
+            }
         }} />;
     }
 
+    if (!isAuthenticated) {
+        return <Login onLoginSuccess={handleLoginSuccess} />;
+    }
+
+    const currentExam = exams.find(e => e.id === selectedExamId);
+
     if (view === 'exam-detail' && currentExam) {
-        return <ExamDetail exam={currentExam} onUpdateExam={(id, data)=>setExams(prev=>prev.map(e=>e.id===id?data:e))} onBack={()=>{setView('dashboard');setSelectedExamId(null)}} onSimulate={()=>{setView('student')}} />;
+        // Passamos uma versão customizada do fetch/update para o ExamDetail ou
+        // alteramos o componente ExamDetail para aceitar user.id.
+        // A maneira mais limpa sem mexer no ExamDetail agora é sobrescrever o onUpdateExam
+        // mas o ExamDetail faz o fetch PUT internamente.
+        // CORREÇÃO RÁPIDA: Vamos alterar o ExamDetail para aceitar uma prop `userId` (veja abaixo)
+        return <ExamDetail 
+            exam={currentExam} 
+            userId={user.id} // <--- Passando ID para o componente filho
+            onUpdateExam={(id, data)=>setExams(prev=>prev.map(e=>e.id===id?data:e))} 
+            onBack={()=>{setView('dashboard');setSelectedExamId(null)}} 
+            onSimulate={()=>{setView('student')}} 
+        />;
     }
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
             <div className="max-w-5xl mx-auto">
-                <header className="mb-8"><h1 className="text-3xl font-extrabold text-blue-900">Painel do Professor</h1></header>
+                <header className="mb-8 flex justify-between items-center">
+                    <h1 className="text-3xl font-extrabold text-blue-900">Painel do Professor</h1>
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm text-gray-500 font-medium hidden sm:block">{user.email}</span>
+                        <button onClick={handleLogout} className="text-sm font-bold text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg transition">
+                            Sair
+                        </button>
+                    </div>
+                </header>
                 <ExamList exams={exams} onCreateExam={handleCreateExam} onSelectExam={(e)=>{setSelectedExamId(e.id);setView('exam-detail')}} onDeleteExam={handleDeleteExam} />
             </div>
         </div>
@@ -537,7 +625,6 @@ export default function Page() {
                 @keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
                 .animate-fade-in-up { animation: fade-in-up 0.3s ease-out forwards; }
                 .animate-scale-in { animation: scale-in 0.2s ease-out forwards; }
-                /* Custom Scrollbar */
                 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }

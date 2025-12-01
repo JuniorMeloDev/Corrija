@@ -3,9 +3,16 @@ import pool from '@/app/lib/db';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-// GET: Lista todas as provas e seus resultados
-export async function GET() {
+// GET: Lista APENAS as provas do usuário logado
+export async function GET(request) {
   try {
+    // Pega o ID do usuário enviado pelo Frontend
+    const userId = request.headers.get('x-user-id');
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Usuário não identificado' }, { status: 401 });
+    }
+
     const client = await pool.connect();
     
     const query = `
@@ -13,16 +20,17 @@ export async function GET() {
         e.*, 
         (SELECT COUNT(*) FROM results r WHERE r.exam_id = e.id) as result_count 
       FROM exams e 
+      WHERE e.user_id = $1 
       ORDER BY e.created_at DESC
     `;
     
-    const result = await client.query(query);
+    const result = await client.query(query, [userId]);
     client.release();
 
     const exams = result.rows.map(row => ({
       id: row.id,
       subject: row.subject,
-      questions: row.questions, // Retorna a estrutura completa (tipos + respostas)
+      questions: row.questions,
       resultsCount: parseInt(row.result_count)
     }));
 
@@ -33,23 +41,26 @@ export async function GET() {
   }
 }
 
-// POST: Cria uma nova prova
+// POST: Cria uma nova prova vinculada ao usuário
 export async function POST(request) {
   try {
+    const userId = request.headers.get('x-user-id');
     const { subject, questions } = await request.json();
     
-    // Validação básica
+    if (!userId) {
+      return NextResponse.json({ error: 'Usuário não autenticado' }, { status: 401 });
+    }
+
     if (!subject || !questions || !Array.isArray(questions)) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
     }
 
-    // Gera um ID curto aleatório (ex: 'a1b2c3')
     const id = crypto.randomBytes(3).toString('hex');
 
     const client = await pool.connect();
     await client.query(
-      'INSERT INTO exams (id, subject, questions) VALUES ($1, $2, $3)',
-      [id, subject, JSON.stringify(questions)]
+      'INSERT INTO exams (id, subject, questions, user_id) VALUES ($1, $2, $3, $4)',
+      [id, subject, JSON.stringify(questions), userId]
     );
     client.release();
 
