@@ -52,7 +52,7 @@ const Login = ({ onLoginSuccess }) => {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50/50 transition-all"
+                            className="w-full p-3 border text-black border-gray-300 rounded-xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50/50 transition-all"
                             // Placeholder removido
                         />
                     </div>
@@ -65,7 +65,7 @@ const Login = ({ onLoginSuccess }) => {
                                 required
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full p-3 pr-10 border border-gray-300 rounded-xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50/50 transition-all"
+                                className="w-full p-3 text-black pr-10 border border-gray-300 rounded-xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50/50 transition-all"
                                 // Placeholder removido
                             />
                             <button
