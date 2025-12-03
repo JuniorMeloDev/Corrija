@@ -479,7 +479,7 @@ const StudentExam = ({ examData, onFinishExam, onBack }) => {
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
             ✓
           </div>
-          <h2 className="text-2xl font-bold mb-2">Prova Enviada!</h2>
+          <h2 className="text-2xl font-bold mb-2 text-black">Prova Enviada!</h2>
           <p className="text-gray-600 mb-6">
             Sua nota:{" "}
             <span className="font-bold text-blue-600 text-xl">
@@ -507,21 +507,21 @@ const StudentExam = ({ examData, onFinishExam, onBack }) => {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+            className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100 text-black"
             placeholder="Seu Nome Completo"
           />
           <input
             type="text"
             value={matricula}
             onChange={(e) => setMatricula(e.target.value)}
-            className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+            className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100 text-black"
             placeholder="Matrícula"
           />
           <input
             type="text"
             value={university}
             onChange={(e) => setUniversity(e.target.value)}
-            className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+            className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-100 text-black"
             placeholder="Universidade"
           />
         </div>
