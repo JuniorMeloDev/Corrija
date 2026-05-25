@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Login from "@/app/components/Login";
+import PhotoAnswerReader from "@/app/components/PhotoAnswerReader";
 
 // =========================================================================
 // 1. UTILITÁRIOS E CONSTANTES
@@ -112,15 +114,6 @@ const NovaProva = ({ isOpen, onClose, onCreate }) => {
   const [questionTypes, setQuestionTypes] = useState(
     Array(10).fill("multiple_choice")
   );
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (isOpen) {
-      setSubjectName("");
-      setNumQuestions(10);
-      setQuestionTypes(Array(10).fill("multiple_choice"));
-    }
-  }, [isOpen]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -525,6 +518,7 @@ const StudentExam = ({ examData, onFinishExam, onBack }) => {
             placeholder="Universidade"
           />
         </div>
+
         {examData.questions.map((q, idx) => (
           <div key={idx} className="p-4 border rounded-xl bg-gray-50/50">
             <span className="font-bold mr-3 text-gray-500">#{idx + 1}</span>
@@ -578,6 +572,7 @@ const StudentExam = ({ examData, onFinishExam, onBack }) => {
           {isSubmitting ? "Enviando..." : "Finalizar Prova"}
         </button>
       </div>
+
       <ConfirmModal
         isOpen={showConfirm}
         title="Finalizar Prova?"
@@ -585,6 +580,7 @@ const StudentExam = ({ examData, onFinishExam, onBack }) => {
         onCancel={() => setShowConfirm(false)}
         message="Tem certeza que deseja enviar suas respostas? Não será possível alterar depois."
       />
+
     </div>
   );
 };
@@ -598,6 +594,8 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate, userId }) => {
   const [isEditingKey, setIsEditingKey] = useState(false);
   const [msg, setMsg] = useState("");
   const [showQR, setShowQR] = useState(false);
+  const [showPhotoReader, setShowPhotoReader] = useState(false);
+  const [photoReadSummary, setPhotoReadSummary] = useState(null);
   const [hostUrl, setHostUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -679,6 +677,18 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate, userId }) => {
     });
   };
 
+  const handleApplyTeacherPhoto = (detectedAnswers, scorePreview, warnings) => {
+    setPhotoReadSummary({
+      score: scorePreview.score,
+      hits: scorePreview.hits,
+      total: scorePreview.total,
+      warnings: warnings || [],
+      answers: detectedAnswers,
+      appliedAt: new Date().toISOString(),
+    });
+    setShowPhotoReader(false);
+  };
+
   const results = fullExamData.results || [];
   const questions = fullExamData.questions || [];
   const examUrl = `${hostUrl}?examId=${exam.id}`;
@@ -713,6 +723,12 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate, userId }) => {
             className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg font-bold shadow-md transition flex items-center gap-2"
           >
             QR Code
+          </button>
+          <button
+            onClick={() => setShowPhotoReader(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow-md transition flex items-center gap-2"
+          >
+            Ler foto
           </button>
           {/* Botão Simular removido */}
         </div>
@@ -823,6 +839,33 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate, userId }) => {
           <h2 className="text-lg font-bold text-gray-700 mb-4">
             Resultados ({filteredResults.length})
           </h2>
+          {photoReadSummary && (
+            <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="text-sm font-bold text-blue-900">
+                    Prévia da leitura por foto
+                  </div>
+                  <p className="text-sm text-blue-800/80">
+                    Nota estimada:{" "}
+                    <span className="font-extrabold">
+                      {Number(photoReadSummary.score).toFixed(1)}
+                    </span>
+                  </p>
+                </div>
+                <div className="text-xs text-blue-700 font-medium">
+                  {photoReadSummary.hits}/{photoReadSummary.total} acertos
+                </div>
+              </div>
+              {photoReadSummary.warnings?.length > 0 && (
+                <ul className="mt-3 text-sm text-blue-800 list-disc pl-5 space-y-1">
+                  {photoReadSummary.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Filtros */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -902,11 +945,14 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate, userId }) => {
               ✕
             </button>
             <h3 className="font-bold text-xl mb-4">Acesso do Aluno</h3>
-            <img
+            <Image
               src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
                 examUrl
               )}`}
               alt="Qr Code Acesso a prova"
+              width={200}
+              height={200}
+              unoptimized
               className="mx-auto border p-2 rounded-lg mb-4"
             />
             <p className="text-xs text-gray-500 mb-2">
@@ -928,6 +974,13 @@ const ExamDetail = ({ exam, onUpdateExam, onBack, onSimulate, userId }) => {
         onClose={() => setSelectedStudentResult(null)}
         result={selectedStudentResult}
         questions={questions}
+      />
+
+      <PhotoAnswerReader
+        isOpen={showPhotoReader}
+        questions={questions}
+        onClose={() => setShowPhotoReader(false)}
+        onApply={handleApplyTeacherPhoto}
       />
     </div>
   );

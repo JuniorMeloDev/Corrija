@@ -1,6 +1,7 @@
 // app/api/submit/route.js
 import pool from '@/app/lib/db';
 import { NextResponse } from 'next/server';
+import { calculateExamScore } from '@/app/lib/scoring';
 
 export async function POST(request) {
   try {
@@ -19,32 +20,7 @@ export async function POST(request) {
 
     const questions = examRes.rows[0].questions;
     
-    // Calcular a Nota (Lógica V/F parcial + Múltipla Escolha)
-    let hits = 0;
-    const total = questions.length;
-    
-    for (let i = 0; i < total; i++) {
-        const qType = questions[i].type;
-        const correctAns = questions[i].answer;
-        const studentAns = answers[i];
-
-        if (qType === 'true_false' && Array.isArray(correctAns)) {
-            if (Array.isArray(studentAns)) {
-                correctAns.forEach((val, index) => {
-                    if (val && studentAns[index] === val) {
-                        hits += 0.2;
-                    }
-                });
-            }
-        } else {
-            if ((studentAns || '').toUpperCase() === (correctAns || '').toUpperCase()) {
-                hits += 1.0;
-            }
-        }
-    }
-    
-    hits = parseFloat(hits.toFixed(2));
-    const score = (hits / total) * 10.0;
+    const { hits, total, score } = calculateExamScore(questions, answers);
 
     // 2. Inserir a universidade no banco
     const insertQuery = `
